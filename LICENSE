@@ -1,0 +1,66 @@
+MIT License with Ethical Use Clause
+
+Copyright (c) 2024 CryptoGuard Project
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+1. **Authorized Use Only**
+   
+   This software is designed for ENCRYPTING YOUR OWN DATA ONLY.
+   Users MUST use this tool responsibly and ethically.
+   Unauthorized encryption of others' data is prohibited.
+
+2. **Ethical Use Requirement**
+   
+   The Software shall be used only for:
+   - Protecting your own sensitive data
+   - Learning about cryptography and encryption
+   - Educational purposes in controlled environments
+   - Secure communication between trusted parties
+
+3. **Prohibited Use**
+   
+   The Software MUST NOT be used for:
+   - Encrypting others' data without consent
+   - Ransomware or malicious encryption
+   - Any illegal activity in your jurisdiction
+   - Hiding evidence of criminal activity
+
+4. **Key Management**
+   
+   Users are responsible for:
+   - Keeping their encryption keys safe
+   - Understanding that losing keys means losing data
+   - Secure storage of encryption keys
+   - Not sharing keys with unauthorized parties
+
+5. **No Warranty**
+   
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+6. **User Responsibility**
+   
+   By using this software, you accept full responsibility for your actions
+   and agree to:
+   - Use the software only for protecting your own data
+   - Keep your encryption keys safe
+   - Understand that lost keys cannot be recovered
+   - Accept liability for any data loss due to lost keys
+
+---
+
+IMPORTANT: Always keep your encryption keys safe. Losing the key means
+you CANNOT decrypt your data. Use encryption ethically and responsibly.
+
+See DISCLAIMER.md for complete legal terms.
