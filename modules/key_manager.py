@@ -6,11 +6,12 @@ Key generation, storage, and management operations.
 """
 
 import os
+import re
 import json
-import base64
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, List
 
 from .crypto_engine import CryptoEngine
 from .utils import ensure_directory, calculate_hash
@@ -42,22 +43,43 @@ class KeyManager:
         # Crypto engine
         self.crypto_engine = CryptoEngine(config)
         
+        # Thread lock for registry access
+        self._registry_lock = threading.Lock()
+        
         # Key registry file
         self.registry_file = os.path.join(self.keys_dir, 'key_registry.json')
         self._load_registry()
     
     def _load_registry(self):
         """Load the key registry from file."""
-        if os.path.exists(self.registry_file):
-            with open(self.registry_file, 'r') as f:
-                self.registry = json.load(f)
-        else:
-            self.registry = {}
+        with self._registry_lock:
+            if os.path.exists(self.registry_file):
+                with open(self.registry_file, 'r') as f:
+                    self.registry = json.load(f)
+            else:
+                self.registry = {}
     
     def _save_registry(self):
         """Save the key registry to file."""
-        with open(self.registry_file, 'w') as f:
-            json.dump(self.registry, f, indent=2)
+        with self._registry_lock:
+            with open(self.registry_file, 'w') as f:
+                json.dump(self.registry, f, indent=2)
+    
+    def _sanitize_key_name(self, name: str) -> str:
+        """
+        Sanitize key name for safe use in file paths.
+        
+        Args:
+            name: Key name to sanitize
+            
+        Returns:
+            Sanitized key name
+        """
+        sanitized = re.sub(r'[^\w\-]', '_', name)
+        sanitized = re.sub(r'_+', '_', sanitized).strip('_')
+        if not sanitized:
+            raise ValueError("Key name contains no valid characters")
+        return sanitized
     
     # ==================== Key Generation ====================
     
@@ -74,6 +96,8 @@ class KeyManager:
         Returns:
             Key information dictionary
         """
+        name = self._sanitize_key_name(name)
+        
         # Generate key
         key = self.crypto_engine.generate_aes_key(key_size)
         
@@ -108,8 +132,9 @@ class KeyManager:
             key_info['key_file'] = key_file
         
         # Register key
-        self.registry[name] = key_info
-        self._save_registry()
+        with self._registry_lock:
+            self.registry[name] = key_info
+            self._save_registry()
         
         return key_info
     
@@ -124,6 +149,8 @@ class KeyManager:
         Returns:
             Key information dictionary
         """
+        name = self._sanitize_key_name(name)
+        
         # Generate key
         key = self.crypto_engine.generate_fernet_key()
         
@@ -157,8 +184,9 @@ class KeyManager:
             key_info['key_file'] = key_file
         
         # Register key
-        self.registry[name] = key_info
-        self._save_registry()
+        with self._registry_lock:
+            self.registry[name] = key_info
+            self._save_registry()
         
         return key_info
     
@@ -175,6 +203,8 @@ class KeyManager:
         Returns:
             Key information dictionary
         """
+        name = self._sanitize_key_name(name)
+        
         # Generate key pair
         private_key, public_key = self.crypto_engine.generate_rsa_keypair(key_size)
         
@@ -217,8 +247,9 @@ class KeyManager:
             key_info['private_key_file'] = private_key_file
         
         # Register key
-        self.registry[name] = key_info
-        self._save_registry()
+        with self._registry_lock:
+            self.registry[name] = key_info
+            self._save_registry()
         
         return key_info
     
@@ -345,20 +376,21 @@ class KeyManager:
         Returns:
             True if successful
         """
-        if name not in self.registry:
-            return False
-        
-        key_info = self.registry[name]
-        
-        # Delete key files
-        for key_file in ['key_file', 'private_key_file', 'public_key_file']:
-            file_path = key_info.get(key_file)
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-        
-        # Remove from registry
-        del self.registry[name]
-        self._save_registry()
+        with self._registry_lock:
+            if name not in self.registry:
+                return False
+            
+            key_info = self.registry[name]
+            
+            # Delete key files
+            for key_file in ['key_file', 'private_key_file', 'public_key_file']:
+                file_path = key_info.get(key_file)
+                if file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+            
+            # Remove from registry
+            del self.registry[name]
+            self._save_registry()
         
         return True
     

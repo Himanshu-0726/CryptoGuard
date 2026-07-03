@@ -27,7 +27,6 @@ Options:
     --list-algorithms       List available algorithms
 """
 
-import os
 import sys
 import argparse
 import getpass

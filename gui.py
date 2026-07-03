@@ -6,11 +6,8 @@ CryptoGuard GUI Interface
 Graphical user interface for the CryptoGuard encryption tool.
 """
 
-import os
-import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
-import threading
 from pathlib import Path
 
 try:
@@ -58,7 +55,10 @@ class CryptoGuardGUI:
         
         # Window size
         window_size = self.gui_config.get('window_size', '800x600')
-        width, height = map(int, window_size.split('x'))
+        try:
+            width, height = map(int, window_size.split('x'))
+        except (ValueError, AttributeError):
+            width, height = 800, 600
         self.root.geometry(f"{width}x{height}")
         
         # Center window

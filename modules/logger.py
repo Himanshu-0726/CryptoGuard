@@ -9,9 +9,11 @@ import os
 import json
 import sqlite3
 import logging
+import atexit
+import threading
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Optional
+from typing import Dict, List
 from pathlib import Path
 
 # Project root for relative paths
@@ -52,9 +54,15 @@ class Logger:
         self.log_dir = str(PROJECT_ROOT / log_dir)
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         
+        # Thread lock for SQLite access
+        self._db_lock = threading.Lock()
+        
         # Setup logging
         self._setup_file_logger()
         self._setup_sqlite()
+        
+        # Register close handler
+        atexit.register(self.close)
         
         # Statistics
         self.stats = {
@@ -110,32 +118,33 @@ class Logger:
     
     def _create_tables(self):
         """Create SQLite tables."""
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS operations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                operation_type TEXT NOT NULL,
-                algorithm TEXT,
-                file_name TEXT,
-                file_size INTEGER,
-                success INTEGER DEFAULT 1,
-                error_message TEXT,
-                details TEXT
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS keys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                key_name TEXT NOT NULL,
-                algorithm TEXT NOT NULL,
-                key_size INTEGER,
-                encrypted INTEGER DEFAULT 0
-            )
-        ''')
-        
-        self.conn.commit()
+        with self._db_lock:
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS operations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    algorithm TEXT,
+                    file_name TEXT,
+                    file_size INTEGER,
+                    success INTEGER DEFAULT 1,
+                    error_message TEXT,
+                    details TEXT
+                )
+            ''')
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    key_name TEXT NOT NULL,
+                    algorithm TEXT NOT NULL,
+                    key_size INTEGER,
+                    encrypted INTEGER DEFAULT 0
+                )
+            ''')
+            
+            self.conn.commit()
     
     # ==================== Logging Operations ====================
     
@@ -177,22 +186,23 @@ class Logger:
         
         # Log to SQLite
         if self.db_enabled:
-            self.cursor.execute('''
-                INSERT INTO operations (timestamp, operation_type, algorithm,
-                                       file_name, file_size, success,
-                                       error_message, details)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.now().isoformat(),
-                operation_type,
-                algorithm,
-                file_name,
-                file_size,
-                1 if success else 0,
-                error_message,
-                json.dumps(details) if details else None
-            ))
-            self.conn.commit()
+            with self._db_lock:
+                self.cursor.execute('''
+                    INSERT INTO operations (timestamp, operation_type, algorithm,
+                                           file_name, file_size, success,
+                                           error_message, details)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    datetime.now().isoformat(),
+                    operation_type,
+                    algorithm,
+                    file_name,
+                    file_size,
+                    1 if success else 0,
+                    error_message,
+                    json.dumps(details) if details else None
+                ))
+                self.conn.commit()
     
     def log_key_generation(self, key_name: str, algorithm: str,
                           key_size: int = None, encrypted: bool = False):
@@ -217,17 +227,18 @@ class Logger:
         
         # Log to SQLite
         if self.db_enabled:
-            self.cursor.execute('''
-                INSERT INTO keys (timestamp, key_name, algorithm, key_size, encrypted)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                datetime.now().isoformat(),
-                key_name,
-                algorithm,
-                key_size,
-                1 if encrypted else 0
-            ))
-            self.conn.commit()
+            with self._db_lock:
+                self.cursor.execute('''
+                    INSERT INTO keys (timestamp, key_name, algorithm, key_size, encrypted)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    datetime.now().isoformat(),
+                    key_name,
+                    algorithm,
+                    key_size,
+                    1 if encrypted else 0
+                ))
+                self.conn.commit()
     
     def log_error(self, message: str, details: Dict = None):
         """
@@ -241,18 +252,19 @@ class Logger:
         self.file_logger.error(message)
         
         if self.db_enabled:
-            self.cursor.execute('''
-                INSERT INTO operations (timestamp, operation_type, success,
-                                       error_message, details)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                datetime.now().isoformat(),
-                'error',
-                0,
-                message,
-                json.dumps(details) if details else None
-            ))
-            self.conn.commit()
+            with self._db_lock:
+                self.cursor.execute('''
+                    INSERT INTO operations (timestamp, operation_type, success,
+                                           error_message, details)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    datetime.now().isoformat(),
+                    'error',
+                    0,
+                    message,
+                    json.dumps(details) if details else None
+                ))
+                self.conn.commit()
     
     # ==================== Query Operations ====================
     
@@ -280,10 +292,11 @@ class Logger:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
         
-        self.cursor.execute(query, params)
-        columns = [description[0] for description in self.cursor.description]
-        
-        return [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        with self._db_lock:
+            self.cursor.execute(query, params)
+            columns = [description[0] for description in self.cursor.description]
+            
+            return [dict(zip(columns, row)) for row in self.cursor.fetchall()]
     
     def get_keys(self) -> List[Dict]:
         """
@@ -295,10 +308,11 @@ class Logger:
         if not self.db_enabled:
             return []
         
-        self.cursor.execute("SELECT * FROM keys ORDER BY timestamp DESC")
-        columns = [description[0] for description in self.cursor.description]
-        
-        return [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+        with self._db_lock:
+            self.cursor.execute("SELECT * FROM keys ORDER BY timestamp DESC")
+            columns = [description[0] for description in self.cursor.description]
+            
+            return [dict(zip(columns, row)) for row in self.cursor.fetchall()]
     
     def get_statistics(self) -> Dict:
         """Get logging statistics."""
@@ -376,4 +390,5 @@ class Logger:
     def close(self):
         """Close database connection."""
         if self.db_enabled:
-            self.conn.close()
+            with self._db_lock:
+                self.conn.close()
