@@ -14,7 +14,49 @@
 git clone https://github.com/Himanshu-0726/CryptoGuard.git
 cd CryptoGuard
 pip install -r requirements.txt
-python encryptor.py --accept-terms --encrypt "Hello World" --password mypass
+python cryptoguard.py encrypt "Hello World"
+```
+
+---
+
+## Usage
+
+### Simple Commands
+
+```bash
+# Encrypt text
+python cryptoguard.py encrypt "Hello World"
+
+# Decrypt text
+python cryptoguard.py decrypt "gAAAAABk...paste_here..."
+
+# Encrypt a file
+python cryptoguard.py file-encrypt document.txt
+
+# Decrypt a file
+python cryptoguard.py file-decrypt document.txt.enc
+
+# List stored keys
+python cryptoguard.py keys
+
+# Generate a key
+python cryptoguard.py generate-key mykey
+
+# Launch GUI
+python cryptoguard.py gui
+```
+
+### Password Options
+
+```bash
+# Pass password directly
+python cryptoguard.py encrypt "Hello World" -p mypass
+
+# Or use a different algorithm
+python cryptoguard.py encrypt "Hello World" -a fernet
+
+# Or save to file
+python cryptoguard.py encrypt "Hello World" -o encrypted.txt
 ```
 
 ---
@@ -88,21 +130,24 @@ Tabs available: **Text Encryption** | **File Encryption** | **Key Management** |
 
 ## CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `--accept-terms` | Accept legal terms (required) |
-| `--gui` | Launch GUI interface |
-| `--encrypt TEXT` | Encrypt text |
-| `--decrypt TEXT` | Decrypt text |
-| `--encrypt-file FILE` | Encrypt a file |
-| `--decrypt-file FILE` | Decrypt a file |
-| `--algorithm ALG` | Algorithm: `aes`, `fernet`, `rsa` |
-| `--password PASS` | Encryption password |
-| `--generate-key NAME` | Generate a key |
-| `--list-keys` | List stored keys |
-| `--list-algorithms` | List algorithms |
-| `--output FILE` | Output file |
-| `--clipboard` | Copy result to clipboard |
+| Command | Description |
+|---------|-------------|
+| `encrypt "text"` | Encrypt text |
+| `decrypt "text"` | Decrypt text |
+| `file-encrypt file.txt` | Encrypt a file |
+| `file-decrypt file.txt.enc` | Decrypt a file |
+| `keys` | List stored keys |
+| `generate-key name` | Generate a new key |
+| `gui` | Launch GUI |
+| `algorithms` | List algorithms |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-p PASSWORD` | Password (prompted if not provided) |
+| `-a ALGORITHM` | Algorithm: `aes`, `fernet`, `rsa` |
+| `-o FILE` | Save output to file |
 
 ---
 
@@ -145,8 +190,9 @@ logging:
 
 ```
 CryptoGuard/
-├── encryptor.py              # CLI interface
-├── gui.py                    # GUI interface
+├── cryptoguard.py              # Simple CLI entry point (START HERE)
+├── encryptor.py                # Advanced CLI interface
+├── gui.py                      # GUI interface
 ├── requirements.txt          # Dependencies
 ├── config.yaml               # Configuration
 ├── LICENSE                   # MIT License

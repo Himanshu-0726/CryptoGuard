@@ -62,3 +62,6 @@ encrypted/*.enc
 config.yaml
 
 encrypted/
+
+# Terms acceptance
+.terms_accepted
