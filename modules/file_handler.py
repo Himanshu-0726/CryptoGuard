@@ -16,25 +16,31 @@ from .crypto_engine import CryptoEngine
 from .key_manager import KeyManager
 from .utils import ensure_directory, format_file_size, secure_delete_file
 
+# Project root for relative paths
+PROJECT_ROOT = Path(__file__).parent.parent
+
 
 class FileHandler:
     """
     Handles file encryption and decryption operations.
     """
     
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: Dict = None, key_manager=None):
         """
         Initialize the file handler.
         
         Args:
             config: Configuration dictionary
+            key_manager: Shared KeyManager instance (optional)
         """
         self.config = config or {}
         self.file_config = self.config.get('files', {})
         
-        # Directories
-        self.encrypted_dir = self.file_config.get('encrypted_dir', 'encrypted')
-        self.temp_dir = self.file_config.get('temp_dir', 'temp')
+        # Directories (relative to project root)
+        encrypted_dir = self.file_config.get('encrypted_dir', 'encrypted')
+        temp_dir = self.file_config.get('temp_dir', 'temp')
+        self.encrypted_dir = str(PROJECT_ROOT / encrypted_dir)
+        self.temp_dir = str(PROJECT_ROOT / temp_dir)
         self.encrypted_extension = self.file_config.get('encrypted_extension', '.enc')
         self.backup_original = self.file_config.get('backup_original', True)
         
@@ -44,7 +50,7 @@ class FileHandler:
         
         # Initialize components
         self.crypto_engine = CryptoEngine(config)
-        self.key_manager = KeyManager(config)
+        self.key_manager = key_manager if key_manager is not None else KeyManager(config)
     
     # ==================== File Encryption ====================
     
@@ -83,11 +89,7 @@ class FileHandler:
         }
         
         # Encrypt data
-        if password:
-            encrypted_result = self.crypto_engine.encrypt_with_password(
-                file_data, password, algorithm
-            )
-        elif key_name:
+        if key_name:
             # Get key from key manager
             key = self.key_manager.get_key(key_name, password)
             if not key:
@@ -104,10 +106,14 @@ class FileHandler:
                 encrypted_data = self.crypto_engine.encrypt_fernet(file_data, key)
                 encrypted_result = {
                     'algorithm': 'fernet',
-                    'ciphertext': encrypted_data.decode()
+                    'ciphertext': base64.b64encode(encrypted_data).decode()
                 }
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")
+        elif password:
+            encrypted_result = self.crypto_engine.encrypt_with_password(
+                file_data, password, algorithm
+            )
         else:
             raise ValueError("Either password or key_name must be provided")
         
@@ -260,11 +266,7 @@ class FileHandler:
         algorithm = encrypted_data.get('algorithm', 'aes-256-cbc')
         
         # Decrypt data
-        if password:
-            decrypted_data = self.crypto_engine.decrypt_with_password(
-                encrypted_data, password
-            )
-        elif key_name:
+        if key_name:
             # Get key from key manager
             key = self.key_manager.get_key(key_name, password)
             if not key:
@@ -279,6 +281,10 @@ class FileHandler:
                 decrypted_data = self.crypto_engine.decrypt_fernet(ciphertext, key)
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")
+        elif password:
+            decrypted_data = self.crypto_engine.decrypt_with_password(
+                encrypted_data, password
+            )
         else:
             raise ValueError("Either password or key_name must be provided")
         

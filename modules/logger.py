@@ -14,6 +14,9 @@ from logging.handlers import RotatingFileHandler
 from typing import Dict, List, Optional
 from pathlib import Path
 
+# Project root for relative paths
+PROJECT_ROOT = Path(__file__).parent.parent
+
 
 class Color:
     """ANSI color codes for terminal output."""
@@ -44,8 +47,9 @@ class Logger:
         self.config = config or {}
         self.log_config = self.config.get('logging', {})
         
-        # Setup directories
-        self.log_dir = self.log_config.get('log_dir', 'logs')
+        # Setup directories (relative to project root)
+        log_dir = self.log_config.get('log_dir', 'logs')
+        self.log_dir = str(PROJECT_ROOT / log_dir)
         Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         
         # Setup logging
@@ -67,33 +71,32 @@ class Logger:
         self.file_logger = logging.getLogger('CryptoGuard')
         self.file_logger.setLevel(getattr(logging, self.log_config.get('log_level', 'INFO').upper()))
         
-        # Clear existing handlers
-        self.file_logger.handlers.clear()
-        
-        # File handler with rotation
-        log_file = os.path.join(self.log_dir, 'CryptoGuard.log')
-        max_bytes = self.log_config.get('max_log_size', 10) * 1024 * 1024
-        backup_count = self.log_config.get('max_log_files', 5)
-        
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding='utf-8'
-        )
-        
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(formatter)
-        self.file_logger.addHandler(file_handler)
-        
-        # Console handler
-        if self.log_config.get('console', True):
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(formatter)
-            self.file_logger.addHandler(console_handler)
+        # Only setup handlers if not already configured
+        if not self.file_logger.handlers:
+            # File handler with rotation
+            log_file = os.path.join(self.log_dir, 'CryptoGuard.log')
+            max_bytes = self.log_config.get('max_log_size', 10) * 1024 * 1024
+            backup_count = self.log_config.get('max_log_files', 5)
+            
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8'
+            )
+            
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            file_handler.setFormatter(formatter)
+            self.file_logger.addHandler(file_handler)
+            
+            # Console handler
+            if self.log_config.get('console', True):
+                console_handler = logging.StreamHandler()
+                console_handler.setFormatter(formatter)
+                self.file_logger.addHandler(console_handler)
     
     def _setup_sqlite(self):
         """Setup SQLite database for audit trail."""
@@ -310,13 +313,13 @@ class Logger:
         """Print the application banner."""
         banner = f"""
 {Color.CYAN}{Color.BOLD}
-╔══════════════════════════════════════════════════════════════════╗
-║                      CryptoGuard - Version 1.0.0                ║
-║              Encryption / Decryption Tool                        ║
-╠══════════════════════════════════════════════════════════════════╣
-║  For authorized use only.                                       ║
-║  Always keep your encryption keys safe.                         ║
-╚══════════════════════════════════════════════════════════════════╝
+======================================================================
+                      CryptoGuard - Version 1.0.0
+              Encryption / Decryption Tool
+======================================================================
+  For authorized use only.
+  Always keep your encryption keys safe.
+======================================================================
 {Color.RESET}
 """
         print(banner)
@@ -325,35 +328,35 @@ class Logger:
         """Print legal notice."""
         notice = f"""
 {Color.YELLOW}{Color.BOLD}
-╔══════════════════════════════════════════════════════════════════╗
-║                        LEGAL NOTICE                             ║
-╠══════════════════════════════════════════════════════════════════╣
-║  Use encryption ethically and responsibly.                      ║
-║                                                                  ║
-║  - Always keep your encryption keys safe                        ║
-║  - Losing the key means you CANNOT decrypt your data            ║
-║  - Unauthorized encryption of others' data is illegal           ║
-║  - Use for protecting YOUR OWN data only                        ║
-╚══════════════════════════════════════════════════════════════════╝
+======================================================================
+                         LEGAL NOTICE
+======================================================================
+  Use encryption ethically and responsibly.
+
+  - Always keep your encryption keys safe
+  - Losing the key means you CANNOT decrypt your data
+  - Unauthorized encryption of others' data is illegal
+  - Use for protecting YOUR OWN data only
+======================================================================
 {Color.RESET}
 """
         print(notice)
     
     def print_success(self, message: str):
         """Print success message."""
-        print(f"{Color.GREEN}✓ {message}{Color.RESET}")
+        print(f"{Color.GREEN}[OK] {message}{Color.RESET}")
     
     def print_error(self, message: str):
         """Print error message."""
-        print(f"{Color.RED}✗ {message}{Color.RESET}")
+        print(f"{Color.RED}[ERROR] {message}{Color.RESET}")
     
     def print_info(self, message: str):
         """Print info message."""
-        print(f"{Color.CYAN}ℹ {message}{Color.RESET}")
+        print(f"{Color.CYAN}[INFO] {message}{Color.RESET}")
     
     def print_warning(self, message: str):
         """Print warning message."""
-        print(f"{Color.YELLOW}⚠ {message}{Color.RESET}")
+        print(f"{Color.YELLOW}[WARN] {message}{Color.RESET}")
     
     def print_statistics(self):
         """Print current statistics."""

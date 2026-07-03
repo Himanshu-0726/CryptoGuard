@@ -1,6 +1,6 @@
 # CryptoGuard
 
-Encryption / Decryption Tool for Secure Text and File Protection
+### Encryption / Decryption Tool for Secure Text and File Protection
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
@@ -8,128 +8,85 @@ Encryption / Decryption Tool for Secure Text and File Protection
 
 ---
 
-## ⚠️ Important Warning
+## Quick Start
 
-**Always keep your encryption keys safe. Losing the key means you CANNOT decrypt your data.**
-
----
-
-## What is CryptoGuard?
-
-CryptoGuard is a comprehensive encryption tool that protects your sensitive data using industry-standard cryptographic algorithms.
-
-### Features
-
-- **AES-256 Encryption** - Industry-standard symmetric encryption
-- **Fernet Encryption** - Simple, secure encryption
-- **RSA Encryption** - Asymmetric encryption for key exchange
-- **Key Management** - Generate, store, and manage encryption keys
-- **File Encryption** - Encrypt any file type
-- **Text Encryption** - Encrypt text messages
-- **GUI Interface** - User-friendly graphical interface
-- **CLI Interface** - Command-line interface for power users
+```bash
+git clone https://github.com/Himanshu-0726/CryptoGuard.git
+cd CryptoGuard
+pip install -r requirements.txt
+python encryptor.py --accept-terms --encrypt "Hello World" --password mypass
+```
 
 ---
 
-## ⚠️ Key Safety Warning
+## Features
 
-### Losing Your Key = Losing Your Data
-
-- There is **NO key recovery mechanism**
-- There is **NO backdoor**
-- The developers **CANNOT** help you recover lost keys
-- **Always create backups** of your encryption keys
-
-### Best Practices
-
-1. Store keys in a password manager
-2. Create encrypted backups of keys
-3. Use strong passwords to protect keys
-4. Test decryption before deleting originals
-5. Never share keys with untrusted parties
+| Feature | Description |
+|---------|-------------|
+| AES-256 | Industry-standard symmetric encryption |
+| Fernet | Simple, secure encryption |
+| RSA-2048 | Asymmetric encryption for key exchange |
+| Key Management | Generate, store, and manage encryption keys |
+| File & Text Encryption | Protect any file or text message |
+| GUI + CLI | Both graphical and command-line interfaces |
 
 ---
 
 ## Installation
 
-### Prerequisites
+**Prerequisites:** Python 3.8 or higher
 
-- Python 3.8 or higher
+```bash
+git clone https://github.com/Himanshu-0726/CryptoGuard.git
+cd CryptoGuard
+pip install -r requirements.txt
+```
 
-### Steps
-
-1. **Clone or download the project:**
-   ```bash
-   cd CryptoGuard
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Verify installation:**
-   ```bash
-   python encryptor.py --accept-terms --list-algorithms
-   ```
+Verify it works:
+```bash
+python encryptor.py --accept-terms --list-algorithms
+```
 
 ---
 
 ## Usage
 
-### CLI Interface
+### CLI Examples
 
-**Encrypt text:**
 ```bash
+# Encrypt text
 python encryptor.py --accept-terms --encrypt "Hello World" --password mypass
-```
 
-**Decrypt text:**
-```bash
+# Decrypt text
 python encryptor.py --accept-terms --decrypt "encrypted_text" --password mypass
-```
 
-**Encrypt file:**
-```bash
+# Encrypt a file
 python encryptor.py --accept-terms --encrypt-file document.txt --password mypass
-```
 
-**Decrypt file:**
-```bash
+# Decrypt a file
 python encryptor.py --accept-terms --decrypt-file document.txt.enc --password mypass
-```
 
-**Generate key:**
-```bash
+# Generate a key
 python encryptor.py --accept-terms --generate-key mykey --algorithm aes
-```
 
-**List keys:**
-```bash
+# List stored keys
 python encryptor.py --accept-terms --list-keys
-```
 
-**Launch GUI:**
-```bash
+# Launch GUI
 python encryptor.py --accept-terms --gui
 ```
 
 ### GUI Interface
 
-Launch the graphical interface:
 ```bash
 python gui.py
 ```
 
-The GUI provides:
-- **Text Encryption Tab** - Encrypt/decrypt text
-- **File Encryption Tab** - Encrypt/decrypt files
-- **Key Management Tab** - Generate/view keys
-- **Settings Tab** - Configure options
+Tabs available: **Text Encryption** | **File Encryption** | **Key Management** | **Settings**
 
 ---
 
-## Command Line Options
+## CLI Options
 
 | Option | Description |
 |--------|-------------|
@@ -139,7 +96,7 @@ The GUI provides:
 | `--decrypt TEXT` | Decrypt text |
 | `--encrypt-file FILE` | Encrypt a file |
 | `--decrypt-file FILE` | Decrypt a file |
-| `--algorithm ALG` | Algorithm (aes, fernet, rsa) |
+| `--algorithm ALG` | Algorithm: `aes`, `fernet`, `rsa` |
 | `--password PASS` | Encryption password |
 | `--generate-key NAME` | Generate a key |
 | `--list-keys` | List stored keys |
@@ -149,35 +106,32 @@ The GUI provides:
 
 ---
 
-## Supported Algorithms
+## Algorithms
 
-| Algorithm | Type | Use Case |
+| Algorithm | Type | Best For |
 |-----------|------|----------|
-| **AES-256-CBC** | Symmetric | Fast encryption of large data |
-| **Fernet** | Symmetric | Simple, secure encryption |
-| **RSA-2048** | Asymmetric | Key exchange, small data |
+| AES-256-CBC | Symmetric | Fast encryption of large data |
+| Fernet | Symmetric | Simple, secure encryption |
+| RSA-2048 | Asymmetric | Key exchange, small data |
 
 ---
 
 ## Configuration
 
-Edit `config.yaml` to customize behavior:
+Edit `config.yaml` to customize:
 
 ```yaml
-# Encryption Settings
 encryption:
   default_algorithm: "aes"
   aes_key_size: 256
   rsa_key_size: 2048
   pbkdf2_iterations: 100000
 
-# File Settings
 files:
   keys_dir: "keys"
   encrypted_dir: "encrypted"
   encrypted_extension: ".enc"
 
-# Logging Settings
 logging:
   console: true
   file: true
@@ -197,9 +151,7 @@ CryptoGuard/
 ├── config.yaml               # Configuration
 ├── LICENSE                   # MIT License
 ├── DISCLAIMER.md             # Legal notice
-├── README.md                 # Documentation
 ├── modules/
-│   ├── __init__.py
 │   ├── crypto_engine.py      # Core encryption
 │   ├── key_manager.py        # Key management
 │   ├── file_handler.py       # File operations
@@ -212,69 +164,20 @@ CryptoGuard/
 
 ---
 
-## Ethical Use Guidelines
-
-This tool is designed for protecting YOUR OWN data:
-
-1. **Personal Data Protection**
-   - Encrypt passwords and credentials
-   - Protect sensitive documents
-   - Secure personal notes
-
-2. **Educational Purposes**
-   - Learn about cryptography
-   - Understand encryption algorithms
-   - Practice secure key management
-
-3. **Secure Communication**
-   - Encrypt messages for trusted parties
-   - Share sensitive information securely
-   - Protect confidential data
-
----
-
-## Security Features
-
-- **AES-256** - Industry-standard encryption
-- **PBKDF2** - Secure key derivation
-- **Secure Random** - Cryptographically secure random number generation
-- **PKCS7 Padding** - Proper data padding
-- **Key Encryption** - Keys can be encrypted with passwords
-
----
-
 ## Troubleshooting
 
-**"Password too short" error:**
-```bash
-# Use a stronger password (8+ characters with mixed case, numbers, symbols)
-```
-
-**"Decryption failed" error:**
-```bash
-# Check that you're using the correct password and algorithm
-```
-
-**"Key not found" error:**
-```bash
-# List available keys
-python encryptor.py --accept-terms --list-keys
-```
+| Error | Solution |
+|-------|----------|
+| Password too short | Use 8+ characters with mixed case, numbers, symbols |
+| Decryption failed | Check you're using the correct password and algorithm |
+| Key not found | Run `python encryptor.py --accept-terms --list-keys` |
 
 ---
 
 ## License
 
-This project is licensed under the MIT License with Ethical Use Clause.
-
-See [LICENSE](LICENSE) for details.
+MIT License with Ethical Use Clause. See [LICENSE](LICENSE) for details.
 
 ---
 
-## Disclaimer
-
-Use encryption ethically and responsibly. Always keep your encryption keys safe. See [DISCLAIMER.md](DISCLAIMER.md) for full details.
-
----
-
-**Remember: Always keep your encryption keys safe! Losing the key means you CANNOT decrypt your data.**
+> **Remember:** Always keep your encryption keys safe! Losing the key means you **cannot** decrypt your data. There is no backdoor or recovery mechanism.

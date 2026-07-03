@@ -11,6 +11,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
+from pathlib import Path
 
 try:
     import yaml
@@ -40,10 +41,10 @@ class CryptoGuardGUI:
         self.config = config or {}
         self.gui_config = self.config.get('gui', {})
         
-        # Initialize components
+        # Initialize components with shared key_manager
         self.crypto_engine = CryptoEngine(self.config)
         self.key_manager = KeyManager(self.config)
-        self.file_handler = FileHandler(self.config)
+        self.file_handler = FileHandler(self.config, self.key_manager)
         self.logger = Logger(self.config)
         
         # Setup main window
@@ -151,6 +152,8 @@ class CryptoGuardGUI:
                         value="aes").pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(algo_frame, text="Fernet", variable=self.file_algorithm, 
                         value="fernet").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(algo_frame, text="RSA", variable=self.file_algorithm, 
+                        value="rsa").pack(side=tk.LEFT, padx=5)
         
         # Password
         password_frame = ttk.Frame(file_frame)
@@ -474,6 +477,8 @@ class CryptoGuardGUI:
                 result = self.key_manager.generate_fernet_key(name, password)
             elif algorithm == 'rsa':
                 result = self.key_manager.generate_rsa_keypair(name, password)
+            else:
+                raise ValueError(f"Unsupported algorithm: {algorithm}")
             
             messagebox.showinfo("Success", f"Key '{name}' generated successfully!")
             self.refresh_keys()
@@ -496,7 +501,9 @@ def load_config(config_path: str = None) -> dict:
         return {}
     
     if config_path is None:
-        config_path = 'config.yaml'
+        # Try default locations relative to project root
+        project_root = Path(__file__).parent
+        config_path = str(project_root / 'config.yaml')
     
     try:
         with open(config_path, 'r') as f:

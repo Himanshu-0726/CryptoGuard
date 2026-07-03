@@ -6,6 +6,7 @@ Core encryption and decryption operations using AES, Fernet, and RSA.
 """
 
 import os
+import json
 import base64
 import secrets
 from typing import Optional, Tuple, Dict
@@ -16,7 +17,6 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
 
 
 class CryptoEngine:
@@ -33,7 +33,6 @@ class CryptoEngine:
         """
         self.config = config or {}
         self.enc_config = self.config.get('encryption', {})
-        self.backend = default_backend()
         
         # Default settings
         self.aes_key_size = self.enc_config.get('aes_key_size', 256)
@@ -79,8 +78,7 @@ class CryptoEngine:
         
         private_key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=size,
-            backend=self.backend
+            key_size=size
         )
         
         public_key = private_key.public_key()
@@ -116,8 +114,7 @@ class CryptoEngine:
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
-            iterations=self.pbkdf2_iterations,
-            backend=self.backend
+            iterations=self.pbkdf2_iterations
         )
         
         key = kdf.derive(password.encode())
@@ -142,8 +139,7 @@ class CryptoEngine:
             length=32,
             n=2**14,
             r=8,
-            p=1,
-            backend=self.backend
+            p=1
         )
         
         key = kdf.derive(password.encode())
@@ -166,7 +162,7 @@ class CryptoEngine:
         iv = secrets.token_bytes(16)
         
         # Create cipher
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=self.backend)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
         encryptor = cipher.encryptor()
         
         # Pad data (PKCS7)
@@ -190,19 +186,38 @@ class CryptoEngine:
         Returns:
             Decrypted data
         """
+        # Validate input length (IV + at least 1 block)
+        if len(encrypted_data) < 32:
+            raise ValueError("Encrypted data too short for AES decryption")
+        
         # Extract IV
         iv = encrypted_data[:16]
         ciphertext = encrypted_data[16:]
         
         # Create cipher
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=self.backend)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
         decryptor = cipher.decryptor()
         
         # Decrypt
         padded_data = decryptor.update(ciphertext) + decryptor.finalize()
         
-        # Remove PKCS7 padding
+        # Remove PKCS7 padding with validation
+        if not padded_data:
+            raise ValueError("Decryption produced empty result")
+        
         pad_length = padded_data[-1]
+        
+        # Validate padding
+        if pad_length < 1 or pad_length > 16:
+            raise ValueError("Invalid padding - corrupted data or wrong key")
+        
+        if pad_length > len(padded_data):
+            raise ValueError("Padding length exceeds data length - corrupted data")
+        
+        # Verify all padding bytes match
+        if padded_data[-pad_length:] != bytes([pad_length] * pad_length):
+            raise ValueError("Invalid padding bytes - corrupted data or wrong key")
+        
         data = padded_data[:-pad_length]
         
         return data
@@ -251,8 +266,7 @@ class CryptoEngine:
             Encrypted data
         """
         public_key = serialization.load_pem_public_key(
-            public_key_pem,
-            backend=self.backend
+            public_key_pem
         )
         
         ciphertext = public_key.encrypt(
@@ -266,21 +280,22 @@ class CryptoEngine:
         
         return ciphertext
     
-    def decrypt_rsa(self, encrypted_data: bytes, private_key_pem: bytes) -> bytes:
+    def decrypt_rsa(self, encrypted_data: bytes, private_key_pem: bytes,
+                    password: bytes = None) -> bytes:
         """
         Decrypt RSA encrypted data.
         
         Args:
             encrypted_data: Encrypted data
             private_key_pem: Private key in PEM format
+            password: Password for encrypted private key
             
         Returns:
             Decrypted data
         """
         private_key = serialization.load_pem_private_key(
             private_key_pem,
-            password=None,
-            backend=self.backend
+            password=password
         )
         
         plaintext = private_key.decrypt(
@@ -335,7 +350,7 @@ class CryptoEngine:
             
             return {
                 'algorithm': 'fernet',
-                'ciphertext': ciphertext.decode(),
+                'ciphertext': base64.b64encode(ciphertext).decode(),
                 'salt': base64.b64encode(salt).decode()
             }
         else:
@@ -408,7 +423,7 @@ class CryptoEngine:
         
         if is_password:
             result = self.encrypt_with_password(data, key_or_password, algorithm)
-            return base64.b64encode(str(result).encode()).decode()
+            return base64.b64encode(json.dumps(result).encode()).decode()
         else:
             # Direct key usage
             if algorithm.lower() == 'aes':
@@ -437,7 +452,7 @@ class CryptoEngine:
             Decrypted text
         """
         if is_password:
-            encrypted_info = eval(base64.b64decode(encrypted_text).decode())
+            encrypted_info = json.loads(base64.b64decode(encrypted_text).decode())
             decrypted = self.decrypt_with_password(encrypted_info, key_or_password)
             return decrypted.decode('utf-8')
         else:

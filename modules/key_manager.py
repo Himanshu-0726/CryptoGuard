@@ -15,6 +15,9 @@ from typing import Dict, Optional, Tuple, List
 from .crypto_engine import CryptoEngine
 from .utils import ensure_directory, calculate_hash
 
+# Project root for relative paths
+PROJECT_ROOT = Path(__file__).parent.parent
+
 
 class KeyManager:
     """
@@ -31,8 +34,9 @@ class KeyManager:
         self.config = config or {}
         self.file_config = self.config.get('files', {})
         
-        # Key storage directory
-        self.keys_dir = self.file_config.get('keys_dir', 'keys')
+        # Key storage directory (relative to project root)
+        keys_dir = self.file_config.get('keys_dir', 'keys')
+        self.keys_dir = str(PROJECT_ROOT / keys_dir)
         ensure_directory(self.keys_dir)
         
         # Crypto engine

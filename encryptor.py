@@ -31,7 +31,7 @@ import os
 import sys
 import argparse
 import getpass
-from datetime import datetime
+from pathlib import Path
 
 try:
     import yaml
@@ -44,10 +44,7 @@ from modules.crypto_engine import CryptoEngine
 from modules.key_manager import KeyManager
 from modules.file_handler import FileHandler
 from modules.logger import Logger
-from modules.utils import (
-    copy_to_clipboard, validate_password,
-    calculate_password_strength, paste_from_clipboard
-)
+from modules.utils import copy_to_clipboard, validate_password
 
 
 class CryptoGuard:
@@ -64,11 +61,11 @@ class CryptoGuard:
         """
         self.config = config or {}
         
-        # Initialize components
+        # Initialize components with shared key_manager
         self.logger = Logger(self.config)
         self.crypto_engine = CryptoEngine(self.config)
         self.key_manager = KeyManager(self.config)
-        self.file_handler = FileHandler(self.config)
+        self.file_handler = FileHandler(self.config, self.key_manager)
     
     # ==================== Text Operations ====================
     
@@ -278,8 +275,9 @@ def load_config(config_path: str = None) -> dict:
         return {}
     
     if config_path is None:
-        # Try default locations
-        config_path = 'config.yaml'
+        # Try default locations relative to project root
+        project_root = Path(__file__).parent
+        config_path = str(project_root / 'config.yaml')
     
     try:
         with open(config_path, 'r') as f:
