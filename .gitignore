@@ -60,3 +60,5 @@ encrypted/*.enc
 
 # Config with secrets
 config.yaml
+
+encrypted/
