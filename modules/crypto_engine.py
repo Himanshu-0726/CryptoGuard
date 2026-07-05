@@ -149,76 +149,57 @@ class CryptoEngine:
     
     def encrypt_aes(self, data: bytes, key: bytes) -> bytes:
         """
-        Encrypt data using AES-256-CBC.
+        Encrypt data using AES-256-GCM (authenticated encryption).
         
         Args:
             data: Data to encrypt
             key: AES key
             
         Returns:
-            Encrypted data with IV prepended
+            IV (12 bytes) + ciphertext + tag (16 bytes)
         """
-        # Generate random IV
-        iv = secrets.token_bytes(16)
+        # Generate random 12-byte IV (nonce) for GCM
+        iv = secrets.token_bytes(12)
         
         # Create cipher
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
         encryptor = cipher.encryptor()
         
-        # Pad data (PKCS7)
-        pad_length = 16 - (len(data) % 16)
-        padded_data = data + bytes([pad_length] * pad_length)
+        # Encrypt (GCM handles padding internally)
+        ciphertext = encryptor.update(data) + encryptor.finalize()
         
-        # Encrypt
-        ciphertext = encryptor.update(padded_data) + encryptor.finalize()
-        
-        # Return IV + ciphertext
-        return iv + ciphertext
+        # Return IV + ciphertext + tag
+        return iv + ciphertext + encryptor.tag
     
     def decrypt_aes(self, encrypted_data: bytes, key: bytes) -> bytes:
         """
-        Decrypt AES-256-CBC encrypted data.
+        Decrypt AES-256-GCM encrypted data.
         
         Args:
-            encrypted_data: Encrypted data with IV prepended
+            encrypted_data: IV (12 bytes) + ciphertext + tag (16 bytes)
             key: AES key
             
         Returns:
             Decrypted data
         """
-        # Validate input length (IV + at least 1 block)
-        if len(encrypted_data) < 32:
-            raise ValueError("Encrypted data too short for AES decryption")
+        # Validate input length (12-byte IV + 16-byte tag minimum)
+        if len(encrypted_data) < 28:
+            raise ValueError("Encrypted data too short for AES-GCM decryption")
         
-        # Extract IV
-        iv = encrypted_data[:16]
-        ciphertext = encrypted_data[16:]
+        # Extract IV, ciphertext, and tag
+        iv = encrypted_data[:12]
+        tag = encrypted_data[-16:]
+        ciphertext = encrypted_data[12:-16]
         
         # Create cipher
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
         decryptor = cipher.decryptor()
         
-        # Decrypt
-        padded_data = decryptor.update(ciphertext) + decryptor.finalize()
-        
-        # Remove PKCS7 padding with validation
-        if not padded_data:
-            raise ValueError("Decryption produced empty result")
-        
-        pad_length = padded_data[-1]
-        
-        # Validate padding
-        if pad_length < 1 or pad_length > 16:
-            raise ValueError("Invalid padding - corrupted data or wrong key")
-        
-        if pad_length > len(padded_data):
-            raise ValueError("Padding length exceeds data length - corrupted data")
-        
-        # Verify all padding bytes match
-        if padded_data[-pad_length:] != bytes([pad_length] * pad_length):
-            raise ValueError("Invalid padding bytes - corrupted data or wrong key")
-        
-        data = padded_data[:-pad_length]
+        # Decrypt and verify integrity
+        try:
+            data = decryptor.update(ciphertext) + decryptor.finalize()
+        except Exception:
+            raise ValueError("Decryption failed - data tampered or wrong key")
         
         return data
     
@@ -309,6 +290,69 @@ class CryptoEngine:
         
         return plaintext
     
+    def encrypt_rsa_hybrid(self, data: bytes, public_key_pem: bytes) -> bytes:
+        """
+        Encrypt data using RSA hybrid encryption (RSA-OAEP + AES-256-GCM).
+        Generates a random AES key, encrypts data with it, then RSA-wraps the AES key.
+        
+        Args:
+            data: Data to encrypt
+            public_key_pem: Public key in PEM format
+            
+        Returns:
+            RSA-encrypted AES key (256 bytes) + IV (12 bytes) + ciphertext + tag (16 bytes)
+        """
+        # Generate random AES key
+        aes_key = self.generate_aes_key(256)
+        
+        # Encrypt data with AES-GCM
+        iv = secrets.token_bytes(12)
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(iv))
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(data) + encryptor.finalize()
+        
+        # RSA-OAEP wrap the AES key
+        encrypted_aes_key = self.encrypt_rsa(aes_key, public_key_pem)
+        
+        # Return: encrypted_key_len (4 bytes) + encrypted_key + iv + ciphertext + tag
+        key_len = len(encrypted_aes_key).to_bytes(4, 'big')
+        return key_len + encrypted_aes_key + iv + ciphertext + encryptor.tag
+    
+    def decrypt_rsa_hybrid(self, encrypted_data: bytes, private_key_pem: bytes,
+                           password: bytes = None) -> bytes:
+        """
+        Decrypt RSA hybrid encrypted data.
+        
+        Args:
+            encrypted_data: RSA hybrid encrypted data
+            private_key_pem: Private key in PEM format
+            password: Password for encrypted private key
+            
+        Returns:
+            Decrypted data
+        """
+        # Extract encrypted AES key length and key
+        key_len = int.from_bytes(encrypted_data[:4], 'big')
+        encrypted_aes_key = encrypted_data[4:4 + key_len]
+        
+        # Extract IV, tag, and ciphertext
+        iv = encrypted_data[4 + key_len:4 + key_len + 12]
+        tag = encrypted_data[-16:]
+        ciphertext = encrypted_data[4 + key_len + 12:-16]
+        
+        # RSA decrypt the AES key
+        aes_key = self.decrypt_rsa(encrypted_aes_key, private_key_pem, password)
+        
+        # AES-GCM decrypt the data
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(iv, tag))
+        decryptor = cipher.decryptor()
+        try:
+            data = decryptor.update(ciphertext) + decryptor.finalize()
+        except Exception:
+            raise ValueError("Decryption failed - data tampered or wrong key")
+        
+        return data
+    
     # ==================== Password-Based Encryption ====================
     
     def encrypt_with_password(self, data: bytes, password: str, 
@@ -332,7 +376,7 @@ class CryptoEngine:
             ciphertext = self.encrypt_aes(data, key)
             
             return {
-                'algorithm': 'aes-256-cbc',
+                'algorithm': 'aes-256-gcm',
                 'ciphertext': base64.b64encode(ciphertext).decode(),
                 'salt': base64.b64encode(salt).decode(),
                 'iterations': self.pbkdf2_iterations
@@ -371,12 +415,33 @@ class CryptoEngine:
         ciphertext = base64.b64decode(encrypted_info['ciphertext'])
         salt = base64.b64decode(encrypted_info['salt'])
         
-        if algorithm == 'aes-256-cbc':
+        if algorithm == 'aes-256-gcm':
             # Derive key from password
             key, _ = self.derive_key_from_password(password, salt)
             
             # Decrypt data
             return self.decrypt_aes(ciphertext, key)
+        
+        elif algorithm == 'aes-256-cbc':
+            # Backward compat: decrypt legacy CBC-encrypted data
+            key, _ = self.derive_key_from_password(password, salt)
+            
+            # Extract IV (first 16 bytes) and decrypt
+            iv = ciphertext[:16]
+            ct = ciphertext[16:]
+            
+            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+            decryptor = cipher.decryptor()
+            padded_data = decryptor.update(ct) + decryptor.finalize()
+            
+            # Remove PKCS7 padding
+            pad_length = padded_data[-1]
+            if pad_length < 1 or pad_length > 16:
+                raise ValueError("Invalid padding - corrupted data or wrong key")
+            if padded_data[-pad_length:] != bytes([pad_length] * pad_length):
+                raise ValueError("Invalid padding bytes - corrupted data or wrong key")
+            return padded_data[:-pad_length]
             
         elif algorithm == 'fernet':
             # Derive key from password
@@ -400,13 +465,14 @@ class CryptoEngine:
             Dictionary of algorithm names and descriptions
         """
         return {
-            'aes': 'AES-256-CBC - Industry standard symmetric encryption',
+            'aes': 'AES-256-GCM - Authenticated symmetric encryption (encryption + integrity)',
             'fernet': 'Fernet - Simple, secure symmetric encryption',
             'rsa': 'RSA-2048 - Asymmetric encryption (requires key pair)'
         }
     
     def encrypt_text(self, text: str, key_or_password: str, 
-                    algorithm: str = 'aes', is_password: bool = True) -> str:
+                    algorithm: str = 'aes', is_password: bool = True,
+                    rsa_public_key_pem: bytes = None) -> str:
         """
         Encrypt text string.
         
@@ -415,6 +481,7 @@ class CryptoEngine:
             key_or_password: Encryption key or password
             algorithm: Algorithm to use
             is_password: True if key_or_password is a password
+            rsa_public_key_pem: RSA public key PEM (required for RSA)
             
         Returns:
             Encrypted text (base64 encoded)
@@ -434,11 +501,18 @@ class CryptoEngine:
                 key = key_or_password.encode() if isinstance(key_or_password, str) else key_or_password
                 encrypted = self.encrypt_fernet(data, key)
                 return base64.b64encode(encrypted).decode()
+            elif algorithm.lower() == 'rsa':
+                if rsa_public_key_pem is None:
+                    raise ValueError("RSA public key PEM is required for RSA encryption")
+                encrypted = self.encrypt_rsa_hybrid(data, rsa_public_key_pem)
+                return base64.b64encode(encrypted).decode()
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")
     
     def decrypt_text(self, encrypted_text: str, key_or_password: str,
-                    algorithm: str = 'aes', is_password: bool = True) -> str:
+                    algorithm: str = 'aes', is_password: bool = True,
+                    rsa_private_key_pem: bytes = None,
+                    rsa_key_password: bytes = None) -> str:
         """
         Decrypt text string.
         
@@ -447,12 +521,14 @@ class CryptoEngine:
             key_or_password: Decryption key or password
             algorithm: Algorithm to use
             is_password: True if key_or_password is a password
+            rsa_private_key_pem: RSA private key PEM (required for RSA)
+            rsa_key_password: Password for encrypted RSA private key
             
         Returns:
             Decrypted text
         """
         if is_password:
-            encrypted_info = json.loads(base64.b64decode(encrypted_text).decode())
+            encrypted_info = json.loads(base64.b64decode(encrypted_text))
             decrypted = self.decrypt_with_password(encrypted_info, key_or_password)
             return decrypted.decode('utf-8')
         else:
@@ -466,6 +542,11 @@ class CryptoEngine:
             elif algorithm.lower() == 'fernet':
                 key = key_or_password.encode() if isinstance(key_or_password, str) else key_or_password
                 decrypted = self.decrypt_fernet(encrypted_data, key)
+                return decrypted.decode('utf-8')
+            elif algorithm.lower() == 'rsa':
+                if rsa_private_key_pem is None:
+                    raise ValueError("RSA private key PEM is required for RSA decryption")
+                decrypted = self.decrypt_rsa_hybrid(encrypted_data, rsa_private_key_pem, rsa_key_password)
                 return decrypted.decode('utf-8')
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")

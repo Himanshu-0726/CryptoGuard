@@ -99,13 +99,23 @@ class FileHandler:
             if algorithm.lower() == 'aes':
                 encrypted_data = self.crypto_engine.encrypt_aes(file_data, key)
                 encrypted_result = {
-                    'algorithm': 'aes-256-cbc',
+                    'algorithm': 'aes-256-gcm',
                     'ciphertext': base64.b64encode(encrypted_data).decode()
                 }
             elif algorithm.lower() == 'fernet':
                 encrypted_data = self.crypto_engine.encrypt_fernet(file_data, key)
                 encrypted_result = {
                     'algorithm': 'fernet',
+                    'ciphertext': base64.b64encode(encrypted_data).decode()
+                }
+            elif algorithm.lower() == 'rsa':
+                # RSA hybrid: get public key, encrypt with RSA + AES-GCM
+                public_key_pem = self.key_manager.get_rsa_public_key(key_name)
+                if not public_key_pem:
+                    raise ValueError(f"RSA public key not found: {key_name}")
+                encrypted_data = self.crypto_engine.encrypt_rsa_hybrid(file_data, public_key_pem)
+                encrypted_result = {
+                    'algorithm': 'rsa-hybrid',
                     'ciphertext': base64.b64encode(encrypted_data).decode()
                 }
             else:
@@ -198,7 +208,7 @@ class FileHandler:
         if algorithm.lower() == 'aes':
             encrypted_data = self.crypto_engine.encrypt_aes(file_data, key)
             encrypted_result = {
-                'algorithm': 'aes-256-cbc',
+                'algorithm': 'aes-256-gcm',
                 'ciphertext': base64.b64encode(encrypted_data).decode(),
                 'metadata': metadata
             }
@@ -206,6 +216,13 @@ class FileHandler:
             encrypted_data = self.crypto_engine.encrypt_fernet(file_data, key)
             encrypted_result = {
                 'algorithm': 'fernet',
+                'ciphertext': base64.b64encode(encrypted_data).decode(),
+                'metadata': metadata
+            }
+        elif algorithm.lower() == 'rsa':
+            encrypted_data = self.crypto_engine.encrypt_rsa_hybrid(file_data, key)
+            encrypted_result = {
+                'algorithm': 'rsa-hybrid',
                 'ciphertext': base64.b64encode(encrypted_data).decode(),
                 'metadata': metadata
             }
@@ -260,10 +277,10 @@ class FileHandler:
         with open(input_file, 'r') as f:
             encrypted_data = json.load(f)
         
-        # Extract metadata
+        # Extract metadata — sanitize original_name to prevent path traversal
         metadata = encrypted_data.get('metadata', {})
-        original_name = metadata.get('original_name', 'decrypted_file')
-        algorithm = encrypted_data.get('algorithm', 'aes-256-cbc')
+        original_name = os.path.basename(metadata.get('original_name', 'decrypted_file'))
+        algorithm = encrypted_data.get('algorithm', 'aes-256-gcm')
         
         # Decrypt data
         if key_name:
@@ -279,6 +296,12 @@ class FileHandler:
                 decrypted_data = self.crypto_engine.decrypt_aes(ciphertext, key)
             elif 'fernet' in algorithm.lower():
                 decrypted_data = self.crypto_engine.decrypt_fernet(ciphertext, key)
+            elif 'rsa' in algorithm.lower():
+                # RSA hybrid: get private key, decrypt with RSA + AES-GCM
+                private_key_pem = self.key_manager.get_rsa_private_key(key_name, password)
+                if not private_key_pem:
+                    raise ValueError(f"RSA private key not found: {key_name}")
+                decrypted_data = self.crypto_engine.decrypt_rsa_hybrid(ciphertext, private_key_pem)
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")
         elif password:
@@ -339,10 +362,10 @@ class FileHandler:
         with open(key_file, 'rb') as f:
             key = f.read()
         
-        # Extract metadata
+        # Extract metadata — sanitize original_name to prevent path traversal
         metadata = encrypted_data.get('metadata', {})
-        original_name = metadata.get('original_name', 'decrypted_file')
-        algorithm = encrypted_data.get('algorithm', 'aes-256-cbc')
+        original_name = os.path.basename(metadata.get('original_name', 'decrypted_file'))
+        algorithm = encrypted_data.get('algorithm', 'aes-256-gcm')
         
         # Decrypt with key
         ciphertext = base64.b64decode(encrypted_data['ciphertext'])
@@ -351,6 +374,8 @@ class FileHandler:
             decrypted_data = self.crypto_engine.decrypt_aes(ciphertext, key)
         elif 'fernet' in algorithm.lower():
             decrypted_data = self.crypto_engine.decrypt_fernet(ciphertext, key)
+        elif 'rsa' in algorithm.lower():
+            decrypted_data = self.crypto_engine.decrypt_rsa_hybrid(ciphertext, key)
         else:
             raise ValueError(f"Unsupported algorithm: {algorithm}")
         

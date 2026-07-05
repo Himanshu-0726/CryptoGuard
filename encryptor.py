@@ -68,7 +68,8 @@ class CryptoGuard:
     
     # ==================== Text Operations ====================
     
-    def encrypt_text(self, text: str, password: str, algorithm: str = 'aes') -> str:
+    def encrypt_text(self, text: str, password: str, algorithm: str = 'aes',
+                     rsa_key_name: str = None) -> str:
         """
         Encrypt text.
         
@@ -76,12 +77,21 @@ class CryptoGuard:
             text: Text to encrypt
             password: Encryption password
             algorithm: Encryption algorithm
+            rsa_key_name: RSA key name (required for RSA algorithm)
             
         Returns:
             Encrypted text (base64 encoded)
         """
         try:
-            encrypted = self.crypto_engine.encrypt_text(text, password, algorithm, True)
+            rsa_public_key_pem = None
+            if algorithm.lower() == 'rsa':
+                if rsa_key_name:
+                    rsa_public_key_pem = self.key_manager.get_rsa_public_key(rsa_key_name)
+                if not rsa_public_key_pem:
+                    raise ValueError("RSA public key required. Generate one with --generate-key NAME --algorithm rsa")
+            
+            encrypted = self.crypto_engine.encrypt_text(text, password, algorithm, True,
+                                                        rsa_public_key_pem=rsa_public_key_pem)
             
             # Log operation
             self.logger.log_operation(
@@ -96,7 +106,8 @@ class CryptoGuard:
             self.logger.log_error(f"Encryption failed: {e}")
             raise
     
-    def decrypt_text(self, encrypted_text: str, password: str, algorithm: str = 'aes') -> str:
+    def decrypt_text(self, encrypted_text: str, password: str, algorithm: str = 'aes',
+                     rsa_key_name: str = None) -> str:
         """
         Decrypt text.
         
@@ -104,12 +115,23 @@ class CryptoGuard:
             encrypted_text: Encrypted text
             password: Decryption password
             algorithm: Encryption algorithm
+            rsa_key_name: RSA key name (required for RSA algorithm)
             
         Returns:
             Decrypted text
         """
         try:
-            decrypted = self.crypto_engine.decrypt_text(encrypted_text, password, algorithm, True)
+            rsa_private_key_pem = None
+            rsa_key_password = None
+            if algorithm.lower() == 'rsa':
+                if rsa_key_name:
+                    rsa_private_key_pem = self.key_manager.get_rsa_private_key(rsa_key_name)
+                if not rsa_private_key_pem:
+                    raise ValueError("RSA private key required. Generate one with --generate-key NAME --algorithm rsa")
+            
+            decrypted = self.crypto_engine.decrypt_text(encrypted_text, password, algorithm, True,
+                                                        rsa_private_key_pem=rsa_private_key_pem,
+                                                        rsa_key_password=rsa_key_password)
             
             # Log operation
             self.logger.log_operation(
@@ -126,7 +148,7 @@ class CryptoGuard:
     # ==================== File Operations ====================
     
     def encrypt_file(self, input_file: str, password: str, 
-                    algorithm: str = 'aes') -> dict:
+                    algorithm: str = 'aes', key_name: str = None) -> dict:
         """
         Encrypt a file.
         
@@ -134,12 +156,14 @@ class CryptoGuard:
             input_file: Path to file to encrypt
             password: Encryption password
             algorithm: Encryption algorithm
+            key_name: Key name for RSA encryption
             
         Returns:
             Encryption result dictionary
         """
         try:
-            result = self.file_handler.encrypt_file(input_file, password, algorithm)
+            result = self.file_handler.encrypt_file(input_file, password, algorithm,
+                                                     key_name=key_name)
             
             # Log operation
             self.logger.log_operation(
@@ -412,12 +436,14 @@ Examples:
     
     # Generate key
     if args.generate_key:
-        # Get password if not provided
+        # Get password
         password = args.password
         if not password:
-            password = getpass.getpass("Enter password to encrypt key (or press Enter for no encryption): ")
-            if not password:
-                password = None
+            password = getpass.getpass("Enter password to encrypt the key: ")
+        
+        if not password:
+            app.logger.print_error("Password is required to protect stored keys.")
+            sys.exit(1)
         
         try:
             result = app.generate_key(args.generate_key, args.algorithm, password)
@@ -445,7 +471,8 @@ Examples:
             app.logger.print_warning(f"Password validation: {message}")
         
         try:
-            encrypted = app.encrypt_text(args.encrypt, password, args.algorithm)
+            encrypted = app.encrypt_text(args.encrypt, password, args.algorithm,
+                                         rsa_key_name=args.key_name)
             app.logger.print_success("Text encrypted successfully!")
             print(f"\nEncrypted text:\n{encrypted}\n")
             
@@ -478,7 +505,8 @@ Examples:
             sys.exit(1)
         
         try:
-            decrypted = app.decrypt_text(args.decrypt, password, args.algorithm)
+            decrypted = app.decrypt_text(args.decrypt, password, args.algorithm,
+                                         rsa_key_name=args.key_name)
             app.logger.print_success("Text decrypted successfully!")
             print(f"\nDecrypted text:\n{decrypted}\n")
             
@@ -511,12 +539,14 @@ Examples:
             sys.exit(1)
         
         try:
-            result = app.encrypt_file(args.encrypt_file, password, args.algorithm)
+            result = app.encrypt_file(args.encrypt_file, password, args.algorithm,
+                                      key_name=args.key_name)
             app.logger.print_success("File encrypted successfully!")
             print(f"  Input: {result['input_file']}")
             print(f"  Output: {result['output_file']}")
             print(f"  Original size: {result['original_size']:,} bytes")
             print(f"  Encrypted size: {result['encrypted_size']:,} bytes")
+            print(f"  Algorithm: {result.get('algorithm', args.algorithm).upper()}")
         except Exception as e:
             app.logger.print_error(f"File encryption failed: {e}")
         return

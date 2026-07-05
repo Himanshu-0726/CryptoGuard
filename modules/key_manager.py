@@ -43,8 +43,8 @@ class KeyManager:
         # Crypto engine
         self.crypto_engine = CryptoEngine(config)
         
-        # Thread lock for registry access
-        self._registry_lock = threading.Lock()
+        # Thread lock for registry access (RLock is reentrant — safe for nested calls)
+        self._registry_lock = threading.RLock()
         
         # Key registry file
         self.registry_file = os.path.join(self.keys_dir, 'key_registry.json')
@@ -90,13 +90,16 @@ class KeyManager:
         
         Args:
             name: Key name/identifier
-            password: Optional password to encrypt the key
+            password: Password to encrypt the key (required - keys are always encrypted)
             key_size: Key size in bits
             
         Returns:
             Key information dictionary
         """
         name = self._sanitize_key_name(name)
+        
+        if not password:
+            raise ValueError("Password is required to protect stored keys")
         
         # Generate key
         key = self.crypto_engine.generate_aes_key(key_size)
@@ -110,26 +113,15 @@ class KeyManager:
             'key_hash': calculate_hash(key, 'sha256')[:16]
         }
         
-        # Save key
-        if password:
-            # Encrypt key with password
-            encrypted_key = self.crypto_engine.encrypt_with_password(key, password, 'aes')
-            key_file = os.path.join(self.keys_dir, f"{name}.enc")
-            
-            with open(key_file, 'w') as f:
-                json.dump(encrypted_key, f)
-            
-            key_info['encrypted'] = True
-            key_info['key_file'] = key_file
-        else:
-            # Save key directly (base64 encoded)
-            key_file = os.path.join(self.keys_dir, f"{name}.key")
-            
-            with open(key_file, 'wb') as f:
-                f.write(key)
-            
-            key_info['encrypted'] = False
-            key_info['key_file'] = key_file
+        # Encrypt key with password
+        encrypted_key = self.crypto_engine.encrypt_with_password(key, password, 'aes')
+        key_file = os.path.join(self.keys_dir, f"{name}.enc")
+        
+        with open(key_file, 'w') as f:
+            json.dump(encrypted_key, f)
+        
+        key_info['encrypted'] = True
+        key_info['key_file'] = key_file
         
         # Register key
         with self._registry_lock:
@@ -144,12 +136,15 @@ class KeyManager:
         
         Args:
             name: Key name/identifier
-            password: Optional password to encrypt the key
+            password: Password to encrypt the key (required - keys are always encrypted)
             
         Returns:
             Key information dictionary
         """
         name = self._sanitize_key_name(name)
+        
+        if not password:
+            raise ValueError("Password is required to protect stored keys")
         
         # Generate key
         key = self.crypto_engine.generate_fernet_key()
@@ -162,26 +157,15 @@ class KeyManager:
             'key_hash': calculate_hash(key, 'sha256')[:16]
         }
         
-        # Save key
-        if password:
-            # Encrypt key with password
-            encrypted_key = self.crypto_engine.encrypt_with_password(key, password, 'aes')
-            key_file = os.path.join(self.keys_dir, f"{name}.enc")
-            
-            with open(key_file, 'w') as f:
-                json.dump(encrypted_key, f)
-            
-            key_info['encrypted'] = True
-            key_info['key_file'] = key_file
-        else:
-            # Save key directly
-            key_file = os.path.join(self.keys_dir, f"{name}.key")
-            
-            with open(key_file, 'wb') as f:
-                f.write(key)
-            
-            key_info['encrypted'] = False
-            key_info['key_file'] = key_file
+        # Encrypt key with password
+        encrypted_key = self.crypto_engine.encrypt_with_password(key, password, 'aes')
+        key_file = os.path.join(self.keys_dir, f"{name}.enc")
+        
+        with open(key_file, 'w') as f:
+            json.dump(encrypted_key, f)
+        
+        key_info['encrypted'] = True
+        key_info['key_file'] = key_file
         
         # Register key
         with self._registry_lock:
@@ -197,13 +181,16 @@ class KeyManager:
         
         Args:
             name: Key name/identifier
-            password: Optional password to encrypt the private key
+            password: Password to encrypt the private key (required - keys are always encrypted)
             key_size: Key size in bits
             
         Returns:
             Key information dictionary
         """
         name = self._sanitize_key_name(name)
+        
+        if not password:
+            raise ValueError("Password is required to protect stored keys")
         
         # Generate key pair
         private_key, public_key = self.crypto_engine.generate_rsa_keypair(key_size)
@@ -225,26 +212,15 @@ class KeyManager:
         
         key_info['public_key_file'] = public_key_file
         
-        # Save private key
-        if password:
-            # Encrypt private key with password
-            encrypted_key = self.crypto_engine.encrypt_with_password(private_key, password, 'aes')
-            private_key_file = os.path.join(self.keys_dir, f"{name}_private.enc")
-            
-            with open(private_key_file, 'w') as f:
-                json.dump(encrypted_key, f)
-            
-            key_info['encrypted'] = True
-            key_info['private_key_file'] = private_key_file
-        else:
-            # Save private key directly
-            private_key_file = os.path.join(self.keys_dir, f"{name}_private.pem")
-            
-            with open(private_key_file, 'wb') as f:
-                f.write(private_key)
-            
-            key_info['encrypted'] = False
-            key_info['private_key_file'] = private_key_file
+        # Encrypt private key with password
+        encrypted_key = self.crypto_engine.encrypt_with_password(private_key, password, 'aes')
+        private_key_file = os.path.join(self.keys_dir, f"{name}_private.enc")
+        
+        with open(private_key_file, 'w') as f:
+            json.dump(encrypted_key, f)
+        
+        key_info['encrypted'] = True
+        key_info['private_key_file'] = private_key_file
         
         # Register key
         with self._registry_lock:
@@ -272,20 +248,23 @@ class KeyManager:
         key_info = self.registry[name]
         key_file = key_info.get('key_file')
         
-        if not key_file or not os.path.exists(key_file):
+        if not key_file:
             return None
         
-        if key_info.get('encrypted', False):
-            if not password:
-                return None
-            
-            with open(key_file, 'r') as f:
-                encrypted_key = json.load(f)
-            
-            return self.crypto_engine.decrypt_with_password(encrypted_key, password)
-        else:
-            with open(key_file, 'rb') as f:
-                return f.read()
+        try:
+            if key_info.get('encrypted', False):
+                if not password:
+                    return None
+                
+                with open(key_file, 'r') as f:
+                    encrypted_key = json.load(f)
+                
+                return self.crypto_engine.decrypt_with_password(encrypted_key, password)
+            else:
+                with open(key_file, 'rb') as f:
+                    return f.read()
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
     
     def get_rsa_private_key(self, name: str, password: str = None) -> Optional[bytes]:
         """
@@ -304,20 +283,23 @@ class KeyManager:
         key_info = self.registry[name]
         private_key_file = key_info.get('private_key_file')
         
-        if not private_key_file or not os.path.exists(private_key_file):
+        if not private_key_file:
             return None
         
-        if key_info.get('encrypted', False):
-            if not password:
-                return None
-            
-            with open(private_key_file, 'r') as f:
-                encrypted_key = json.load(f)
-            
-            return self.crypto_engine.decrypt_with_password(encrypted_key, password)
-        else:
-            with open(private_key_file, 'rb') as f:
-                return f.read()
+        try:
+            if key_info.get('encrypted', False):
+                if not password:
+                    return None
+                
+                with open(private_key_file, 'r') as f:
+                    encrypted_key = json.load(f)
+                
+                return self.crypto_engine.decrypt_with_password(encrypted_key, password)
+            else:
+                with open(private_key_file, 'rb') as f:
+                    return f.read()
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
     
     def get_rsa_public_key(self, name: str) -> Optional[bytes]:
         """
